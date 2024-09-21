@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import scipy.stats 
+from scipy import stats
 from scipy.stats import zscore
 
 def missing_values_table(df):
@@ -60,6 +60,7 @@ def missing_data_summary(self) -> pd.DataFrame:
     return missing_df
     
 def handle_missing_data(self, missing_type: str, missing_cols: list) -> pd.DataFrame:
+    
     """
     Handles missing data based on predefined strategies.
     """
@@ -97,3 +98,37 @@ def handle_missing_data(self, missing_type: str, missing_cols: list) -> pd.DataF
                     else:
                         self.data[col] = self.data[col].fillna(0)  # Default for empty median
     return self.data
+
+def remove_all_columns_outliers(df, method="iqr"):
+    """
+    Detect and remove outliers from all numerical columns in the DataFrame using either the IQR or Z-score method.
+    Parameters:
+    df (pd.DataFrame): The DataFrame to process.
+    method (str): The method to use for outlier detection, either 'iqr' or 'zscore'. Defaults to 'iqr'.
+    Returns:
+    pd.DataFrame: A DataFrame with outliers removed.
+    """
+    df_clean = df.copy()  # Copy the original DataFrame to avoid modifying it directly
+    # df_clean.fillna(df_clean.mean(), inplace=True)
+    if method == "iqr":
+        # Loop through each numeric column in the DataFrame
+        for column in df_clean.select_dtypes(include=[np.number]).columns:
+            Q1 = df_clean[column].quantile(0.25)  # First quartile (25th percentile)
+            Q3 = df_clean[column].quantile(0.75)  # Third quartile (75th percentile)
+            IQR = Q3 - Q1  # Interquartile range
+            # Calculate lower and upper bounds for detecting outliers
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+             # Debugging output
+            print(f"Column: {column}")
+            print(f"  Q1: {Q1}, Q3: {Q3}, IQR: {IQR}, Lower Bound: {lower_bound}, Upper Bound: {upper_bound}")           
+            # Remove rows with outliers for the current column
+            df_clean = df_clean[(df_clean[column] >= lower_bound) & (df_clean[column] <= upper_bound)]
+    elif method == "zscore":
+        # Apply Z-score method for detecting outliers
+        z_scores = np.abs(stats.zscore(df_clean.select_dtypes(include=[np.number])))
+        df_clean = df_clean[(z_scores < 3).all(axis=1)]
+    else:
+        raise ValueError("Method must be either 'iqr' or 'zscore'")
+    return df_clean
+    
