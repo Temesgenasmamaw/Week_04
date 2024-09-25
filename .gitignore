@@ -3,3 +3,4 @@ venv
 .venv
 .dvc
 local_storage
+sales_model_*.pkl

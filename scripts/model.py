@@ -2,14 +2,20 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier, RandomForestRegressor
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import GridSearchCV, ShuffleSplit
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 import joblib  # For saving and loading models
 from datetime import datetime
+
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
 
 class SalesModel:
     """
@@ -150,10 +156,74 @@ class SalesModel:
         self.model_pipeline = grid_search.best_estimator_
         return grid_search.best_params_
 
+    def find_best_model_using_gridsearchcv(self):
+        algos = {
+            'logistic_regression': {
+                'model': LogisticRegression(solver='liblinear', multi_class='auto'),
+                'params': {
+                    'C': [1, 5, 10]
+                }
+            },
+            'svm': {
+                'model': SVC(),
+                'params': {
+                    'C': [1, 5, 10, 20, 40, 50, 60, 100],
+                    'kernel': ['rbf', 'linear'],
+                    'gamma': ['scale', 'auto']
+                }
+            },
+            'random_forest': {
+                'model': RandomForestClassifier(),
+                'params': {
+                    'n_estimators': [1, 5, 10, 40]
+                }
+            },
+            'decision_tree': {
+                'model': DecisionTreeClassifier(),
+                'params': {
+                    'criterion': ['gini', 'log_loss', 'entropy'],
+                    'splitter': ['best', 'random']
+                }
+            },
+            'naive_bayes_gaussian': {
+                'model': GaussianNB(),
+                'params': {}
+            },
+            'knn': {
+                'model': KNeighborsClassifier(),
+                'params': {
+                    'n_neighbors': [3, 5, 7],
+                    'weights': ['uniform', 'distance'],
+                    'p': [1, 2]
+                }
+            },
+            'adaboost': {
+                'model': AdaBoostClassifier(estimator=DecisionTreeClassifier()),
+                'params': {
+                    'n_estimators': [50, 100, 200],
+                    'learning_rate': [0.01, 0.1, 1.0]
+                }
+            }
+        }
+
+        scores = []
+        cv = ShuffleSplit(n_splits=5, test_size=0.2, random_state=42)
+    
+        for algo_name, config in algos.items():
+            gs = GridSearchCV(config['model'], config['params'], cv=cv, return_train_score=False)
+            gs.fit(self.X_train, self.y_train)
+            scores.append({
+                'model': algo_name,
+                'best_score': gs.best_score_,
+                'best_params': gs.best_params_
+            })
+    
+        return pd.DataFrame(scores, columns=['model', 'best_score', 'best_params'])
+
     def save_model(self):
         """
         Saves the trained model to a file with the current timestamp in the filename.
-        
+
         Returns
         -------
         None
@@ -161,7 +231,7 @@ class SalesModel:
         # Get current timestamp and format it
         timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         filename = f"../api/model/sales_model_{timestamp}.pkl"
-        
+
         # Save the model
         joblib.dump(self.model_pipeline, filename)
         print(f"Model saved as {filename}")
